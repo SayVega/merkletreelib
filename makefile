@@ -1,4 +1,4 @@
-.PHONY: build run test fmt check clean
+.PHONY: build run test fmt
 
 build:
 	cargo build

@@ -1,12 +1,12 @@
 use crate::hash::sha256;
 #[derive(Clone)]
 struct MerkleNode {
-     hash: [u8; 32],
-     left: Option<Box<MerkleNode>>,
-     right: Option<Box<MerkleNode>>,
+    hash: [u8; 32],
+    left: Option<Box<MerkleNode>>,
+    right: Option<Box<MerkleNode>>,
 }
 pub struct MerkleTree {
-     root: Option<MerkleNode>,
+    root: Option<MerkleNode>,
 }
 
 impl MerkleTree {
@@ -24,8 +24,7 @@ impl MerkleTree {
     }
 }
 
-fn build_leaves_array<T: AsRef<[u8]>>(values: &[T]) -> Vec<MerkleNode>
-{
+fn build_leaves_array<T: AsRef<[u8]>>(values: &[T]) -> Vec<MerkleNode> {
     values
         .iter()
         .map(|value| {
@@ -43,7 +42,6 @@ fn build_merkle_tree_recursively(nodes: &[MerkleNode]) -> MerkleNode {
     if nodes.len() == 1 {
         return nodes[0].clone();
     }
-    
     let mut parents = Vec::new();
     let mut i: usize = 0;
 
@@ -52,15 +50,15 @@ fn build_merkle_tree_recursively(nodes: &[MerkleNode]) -> MerkleNode {
         let right = if i + 1 < nodes.len() {
             nodes[i + 1].clone()
         } else {
-        nodes[i].clone()
+            nodes[i].clone()
         };
 
-    let mut data = Vec::with_capacity(left.hash.len() + right.hash.len());
+        let mut data = Vec::with_capacity(left.hash.len() + right.hash.len());
         data.extend_from_slice(&left.hash);
         data.extend_from_slice(&right.hash);
 
-    let hash = sha256(&data);
-    parents.push(MerkleNode {
+        let hash = sha256(&data);
+        parents.push(MerkleNode {
             hash,
             left: Some(Box::new(left)),
             right: Some(Box::new(right)),
