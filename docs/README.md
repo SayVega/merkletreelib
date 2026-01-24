@@ -10,11 +10,7 @@ Internally it starts hashing all the leaf nodes (initial values) using SHA-256, 
 **Example:**
  ```
 use merkletreelib::MerkleTree;
-let data: Vec<&[u8]> = vec![
-    b"a",
-    b"b",
-    b"c",
-];
+let data = vec!["a", "b", "c"];
 let tree = MerkleTree::from_bytes(&data);
 ```
 Its important to remind that this method only accepts data that can be represented as raw bytes (`AsRef<[u8]>`). Numeric and structurd type must be explicitly converted to bytes before hashing like this:
