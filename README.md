@@ -13,4 +13,4 @@ The library provides the following guarantees:
 
 ## Documentation
 
-Detailed documentation is available in [`docs/README.md`](docs/README.md)
+Detailed documentation is available [`here`](docs/README.md).
