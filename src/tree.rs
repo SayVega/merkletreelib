@@ -19,6 +19,9 @@ impl MerkleTree {
         };
         MerkleTree { root }
     }
+    pub fn root_hash(&self) -> Option<&[u8; 32]> {
+        self.root.as_ref().map(|n| &n.hash)
+    }
 }
 
 fn build_leaves_array<T: AsRef<[u8]>>(values: &[T]) -> Vec<MerkleNode>
@@ -36,7 +39,7 @@ fn build_leaves_array<T: AsRef<[u8]>>(values: &[T]) -> Vec<MerkleNode>
         .collect()
 }
 
-pub fn build_merkle_tree_recursively(nodes: &[MerkleNode]) -> MerkleNode {
+fn build_merkle_tree_recursively(nodes: &[MerkleNode]) -> MerkleNode {
     if nodes.len() == 1 {
         return nodes[0].clone();
     }
@@ -127,5 +130,30 @@ mod tests {
         let root1 = build_merkle_tree_recursively(&leaves1);
         let root2 = build_merkle_tree_recursively(&leaves2);
         assert_eq!(root1.hash, root2.hash);
+    }
+    #[test]
+    fn empty_input_has_no_root() {
+        let data: Vec<&[u8]> = vec![];
+        let tree = MerkleTree::from_bytes(&data);
+        assert!(tree.root.is_none());
+    }
+    #[test]
+    fn single_element_tree() {
+        let data: Vec<&[u8]> = vec![&[42u8]];
+        let tree = MerkleTree::from_bytes(&data);
+        let expected = sha256(&[42u8]);
+        assert_eq!(tree.root_hash(), Some(&expected));
+    }
+    #[test]
+    fn multiple_elements_tree_has_root() {
+        let data: Vec<&[u8]> = vec![&[1], &[2], &[3], &[4]];
+        let tree = MerkleTree::from_bytes(&data);
+        assert!(tree.root.is_some());
+    }
+    #[test]
+    fn odd_number_of_elements_is_supported() {
+        let data: Vec<&[u8]> = vec![&[1], &[2], &[3]];
+        let tree = MerkleTree::from_bytes(&data);
+        assert!(tree.root.is_some());
     }
 }
