@@ -8,6 +8,10 @@ struct MerkleNode {
 pub struct MerkleTree {
     root: Option<MerkleNode>,
 }
+pub enum Direction {
+    Left,
+    Right,
+}
 
 impl MerkleTree {
     pub fn from_bytes<T: AsRef<[u8]>>(values: &[T]) -> Self {
@@ -22,6 +26,34 @@ impl MerkleTree {
     pub fn root_hash(&self) -> Option<&[u8; 32]> {
         self.root.as_ref().map(|n| &n.hash)
     }
+    pub fn generate_proof(&self,target: &[u8;32]) -> Option<Vec<([u8;32],Direction)>> {
+        let root = self.root.as_ref()?;
+        let mut proof = Vec::new();
+        if dfs_generate_proof(root, target, &mut proof) {
+            return Some(proof);
+        } else {
+            return None;
+        }
+    }
+}
+
+pub fn verify_proof(leaf_hash: [u8;32], proof: &[([u8;32], Direction)], root_hash:[u8;32]) -> bool {
+    let mut current = leaf_hash;
+    for (sibling_hash, direction) in proof {
+        let mut data = Vec::with_capacity(current.len() + sibling_hash.len());
+        match direction {
+            Direction::Left => {
+                data.extend_from_slice(sibling_hash);
+                data.extend_from_slice(&current);
+            }
+            Direction::Right => {
+                data.extend_from_slice(&current);
+                data.extend_from_slice(sibling_hash);
+            }
+        }
+        current = sha256(&data);
+    }
+    current== root_hash
 }
 
 fn build_leaves_array<T: AsRef<[u8]>>(values: &[T]) -> Vec<MerkleNode> {
@@ -68,66 +100,38 @@ fn build_merkle_tree_recursively(nodes: &[MerkleNode]) -> MerkleNode {
     build_merkle_tree_recursively(&parents)
 }
 
+fn dfs_generate_proof(node:&MerkleNode, target: &[u8;32], proof: &mut Vec<([u8;32],Direction)>,) -> bool {
+    if node.left.is_none() && node.right.is_none() {
+        return &node.hash == target;
+    }
+    if let Some(left) = &node.left {
+        if dfs_generate_proof(left, target, proof) {
+            if let Some(right) = &node.right {
+            proof.push((right.hash, Direction::Right));
+            }
+            return true;
+        }
+    }
+    if let Some(right) = &node.right {
+        if dfs_generate_proof(right, target, proof) {
+            if let Some(left) = &node.left {
+                proof.push((left.hash, Direction::Left));
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn build_leaves_creates_one_leaf_per_input() {
-        let data = vec!["a", "b", "c"];
-        let leaves = build_leaves_array(&data);
-        assert_eq!(leaves.len(), 3);
-    }
-    #[test]
-    fn leaves_have_no_children() {
-        let data = vec!["hello"];
-        let leaves = build_leaves_array(&data);
-        let leaf = &leaves[0];
-        assert!(leaf.left.is_none());
-        assert!(leaf.right.is_none());
-    }
-    #[test]
-    fn single_node_returns_itself_as_root() {
-        let data = vec!["only"];
-        let leaves = build_leaves_array(&data);
-        let root = build_merkle_tree_recursively(&leaves);
-        assert_eq!(root.hash, leaves[0].hash);
-        assert!(root.left.is_none());
-        assert!(root.right.is_none());
-    }
-    #[test]
-    fn tree_with_two_leaves_has_children() {
-        let data = vec!["a", "b"];
-        let leaves = build_leaves_array(&data);
-        let root = build_merkle_tree_recursively(&leaves);
-        assert!(root.left.is_some());
-        assert!(root.right.is_some());
-    }
-    #[test]
-    fn odd_number_of_leaves_duplicates_last() {
-        let data = vec!["a", "b", "c"];
-        let leaves = build_leaves_array(&data);
-        let root = build_merkle_tree_recursively(&leaves);
-        assert!(root.left.is_some());
-        assert!(root.right.is_some());
-    }
-    #[test]
-    fn merkle_tree_is_order_sensitive() {
-        let data1 = vec!["a", "b"];
-        let data2 = vec!["b", "a"];
-        let leaves1 = build_leaves_array(&data1);
-        let leaves2 = build_leaves_array(&data2);
-        let root1 = build_merkle_tree_recursively(&leaves1);
-        let root2 = build_merkle_tree_recursively(&leaves2);
-        assert_ne!(root1.hash, root2.hash);
-    }
-    #[test]
     fn merkle_tree_is_deterministic() {
         let data = vec!["a", "b", "c", "d"];
-        let leaves1 = build_leaves_array(&data);
-        let leaves2 = build_leaves_array(&data);
-        let root1 = build_merkle_tree_recursively(&leaves1);
-        let root2 = build_merkle_tree_recursively(&leaves2);
-        assert_eq!(root1.hash, root2.hash);
+        let t1 = MerkleTree::from_bytes(&data);
+        let t2 = MerkleTree::from_bytes(&data);
+        assert_eq!(t1.root_hash(), t2.root_hash());
     }
     #[test]
     fn empty_input_has_no_root() {
@@ -153,5 +157,56 @@ mod tests {
         let data: Vec<&[u8]> = vec![&[1], &[2], &[3]];
         let tree = MerkleTree::from_bytes(&data);
         assert!(tree.root.is_some());
+    }
+    #[test]
+    fn changing_inputs_changes_root() {
+        let base = MerkleTree::from_bytes(&["a", "b", "c"]);
+        assert_ne!(base.root_hash(), MerkleTree::from_bytes(&["c", "b", "a"]).root_hash());
+        assert_ne!(base.root_hash(), MerkleTree::from_bytes(&["a", "b", "d"]).root_hash());
+        assert_ne!(base.root_hash(), MerkleTree::from_bytes(&["a", "b"]).root_hash());
+    }
+    #[test]
+    fn generate_and_verify_proof_for_each_leaf() {
+        let data = vec!["a", "b", "c", "d"];
+        let tree = MerkleTree::from_bytes(&data);
+        let root = *tree.root_hash().unwrap();
+        for value in &data {
+            let leaf_hash = sha256(value.as_bytes());
+            let proof = tree.generate_proof(&leaf_hash).unwrap();
+            assert!(verify_proof(leaf_hash, &proof, root));
+        }
+    }    
+    #[test]
+    fn proof_for_non_existing_leaf_fails() {
+        let values: Vec<&str> = vec!["a", "b", "c"];
+        let tree = MerkleTree::from_bytes(&values);
+        let fake_hash = sha256("z".as_bytes());
+        let proof = tree.generate_proof(&fake_hash);
+        assert!(proof.is_none());
+    }
+    #[test]
+    fn odd_number_of_leaves_padding_case() {
+        let values: Vec<&str> = vec!["a", "b", "c"];
+        let tree = MerkleTree::from_bytes(&values);
+        let leaf_hash = sha256("c".as_bytes());
+        let proof = tree.generate_proof(&leaf_hash).unwrap();
+        let root = *tree.root_hash().unwrap();
+        assert!(verify_proof(leaf_hash, &proof, root));
+    }
+    #[test]
+    fn single_element_has_empty_proof() {
+        let values: Vec<&str> = vec!["only"];
+        let tree = MerkleTree::from_bytes(&values);
+        let leaf_hash = sha256("only".as_bytes());
+        let proof = tree.generate_proof(&leaf_hash).unwrap();
+        let root = *tree.root_hash().unwrap();
+        assert!(proof.is_empty());
+        assert!(verify_proof(leaf_hash, &proof, root));
+    }
+    #[test]
+    fn empty_tree_has_no_root_and_no_proofs() {
+        let tree = MerkleTree::from_bytes::<&[u8]>(&[]);
+        assert!(tree.root_hash().is_none());
+        assert!(tree.generate_proof(&[0u8; 32]).is_none());
     }
 }
