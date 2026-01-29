@@ -16,6 +16,8 @@ let tree = MerkleTree::from_bytes(&data);
 ```
 Its important to remind that this method only accepts data that can be represented as raw bytes (`AsRef<[u8]>`). Numeric and structurd type must be explicitly converted to bytes before hashing like this:
 ```
+use merkletreelib::MerkleTree;
+
 let value: u32 = 42;
 let bytes = value.to_be_bytes();
 let tree = MerkleTree::from_bytes(&[bytes]);
@@ -32,12 +34,13 @@ An empty proof is only valid when `leaf_hash == root_hash`.
 **Example**
 ```
 use merkletreelib::MerkleTree;
+use merkletreelib::hash::sha256;
 
 let data = vec!["a", "b", "c"];
 let tree = MerkleTree::from_bytes(&data);
 
 let leaf_hash = sha256("b".as_bytes());
 let proof = tree.generate_proof(&leaf_hash).unwrap();
-let root = *tree.root_hash().unwrap();
+let root = *tree.get_root().unwrap();
 
 ```
