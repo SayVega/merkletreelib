@@ -316,7 +316,9 @@ mod tests {
             let proof = tree.generate_proof(&leaf_hash).unwrap();
             let old_root: [u8; 32] = *tree.get_root().unwrap();
             tree.push("c".as_bytes());
-            assert!(verify_proof(leaf_hash, &proof, old_root));
+            let new_root: [u8; 32] = *tree.get_root().unwrap();
+            assert_ne!(old_root, new_root);
+            assert!(!verify_proof(leaf_hash, &proof, new_root));
         }
     }
 }
